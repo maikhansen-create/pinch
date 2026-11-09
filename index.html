@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pinch</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap">
+<style>
+/* Layout: schwarz-weiße Einspalten-App. Kalibrierfeld ganz oben, dann Zutat, Menge, Kreisvorschau, Vollbild-Knopf. Kalibrierung und Zutaten-Editor als Sheets. */
+:root{
+  --bg:#FFFFFF;
+  --fg:#0A0A0A;
+  --muted:#6C6C6C;
+  --line:#E2E2E2;
+  --surface:#F4F4F4;
+  --ring-fill:rgba(10,10,10,.07);
+  --scrim:rgba(0,0,0,.55);
+  --ov-bg:#000000;
+  --ov-fg:#FFFFFF;
+  --ov-fill:rgba(255,255,255,.14);
+  --font-body:"Geist","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#000000;--fg:#F7F7F7;--muted:#8E8E8E;--line:#2A2A2A;--surface:#121212;
+    --ring-fill:rgba(255,255,255,.1);--scrim:rgba(0,0,0,.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#000000;--fg:#F7F7F7;--muted:#8E8E8E;--line:#2A2A2A;--surface:#121212;
+  --ring-fill:rgba(255,255,255,.1);--scrim:rgba(0,0,0,.7);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{
+  margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.5;
+  padding-block:28px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+main{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:26px;min-width:0}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{flex:none}
+h1{font-weight:700;font-size:2.6rem;letter-spacing:-.045em;line-height:1;margin:0}
+.tag{margin:6px 0 0;color:var(--muted)}
+.label{display:block;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.labelrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+.linkbtn{font:inherit;font-size:.9rem;font-weight:500;background:none;border:0;color:var(--fg);text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:4px 0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  font:inherit;font-size:.95rem;padding:8px 14px;border-radius:999px;border:1px solid var(--line);
+  background:transparent;color:var(--fg);cursor:pointer;
+}
+.chip.mono{font-family:var(--font-mono);font-size:.9rem}
+.chip.add{border-style:dashed}
+.chip[aria-pressed="true"]{background:var(--fg);border-color:var(--fg);color:var(--bg);font-weight:600}
+.chip:focus-visible,input:focus-visible,button:focus-visible,.linkbtn:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+
+/* Kalibrierfeld */
+.calcard{display:flex;align-items:center;gap:14px;padding:16px 18px;border:2px solid var(--fg);border-radius:20px;background:var(--bg);color:var(--fg)}
+.calcard.todo{background:var(--fg);color:var(--bg)}
+.calcard .ic{flex:none;width:40px;height:40px;border-radius:50%;border:2px solid currentColor;display:flex;align-items:center;justify-content:center}
+.calcard .txt{flex:1;min-width:0}
+.calcard strong{display:block;font-size:1.02rem;line-height:1.3}
+.calcard .sub{display:block;font-size:.82rem;opacity:.7;line-height:1.35}
+.calcard button{
+  flex:none;font:inherit;font-weight:600;padding:10px 16px;border-radius:12px;border:2px solid currentColor;background:transparent;color:inherit;cursor:pointer;
+}
+.calcard.todo button{background:var(--bg);color:var(--fg);border-color:var(--bg)}
+.calcard.todo button:focus-visible{outline-color:var(--bg)}
+
+.amount{display:flex;align-items:baseline;gap:10px}
+.amount input{
+  width:9rem;font-family:var(--font-mono);font-size:2.2rem;padding:6px 14px;border-radius:14px;
+  border:1px solid var(--line);background:var(--surface);color:var(--fg);
+}
+.unit{font-family:var(--font-mono);font-size:1.3rem;color:var(--muted)}
+.stage{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  min-height:140px;padding:16px;border-radius:20px;background:var(--surface);overflow:hidden;color:var(--fg);
+}
+.stage svg{display:block;max-width:100%;height:auto}
+.stage p{margin:0;text-align:center}
+.dia{font-family:var(--font-mono);font-size:.9rem;color:var(--muted)}
+.ring{stroke:currentColor;stroke-width:2;fill:var(--ring-fill)}
+.tick{stroke:currentColor;stroke-width:1}
+.btn{
+  width:100%;font:inherit;font-weight:600;font-size:1.05rem;padding:16px;border-radius:16px;border:0;
+  background:var(--fg);color:var(--bg);cursor:pointer;
+}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn:focus-visible{outline-offset:3px}
+.hint{margin:10px 0 0;font-size:.88rem;color:var(--muted)}
+.warn{font-weight:600}
+.steps{margin:10px 0 0;padding-left:1.3rem;display:flex;flex-direction:column;gap:6px}
+.steps strong{font-weight:600}
+.note{font-size:.88rem;color:var(--muted);margin:0}
+
+/* Module: Tabs und Aufteilen */
+.panel{display:flex;flex-direction:column;gap:26px;min-width:0}
+.lb{display:block;margin-bottom:10px}
+.tabs{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.tab{flex:1;font:inherit;font-weight:600;padding:11px 10px;border-radius:999px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.tab:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-radius:20px;background:var(--surface)}
+.summary .big{font-family:var(--font-mono);font-size:1.7rem;line-height:1.2}
+.summary .sn{color:var(--muted);font-size:.9rem}
+.npick{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.npick .sq{width:48px;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-size:1.5rem;line-height:1;cursor:pointer}
+.npick .sq:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+.nval{font-family:var(--font-mono);font-size:2rem;min-width:2.4ch;text-align:center}
+.sumstat{margin:12px 0 0;font-size:.9rem;color:var(--muted);min-height:1.4em}
+.prow{display:flex;align-items:center;gap:10px;padding:5px 0}
+.prow label{width:4.5rem;color:var(--muted);font-size:.9rem}
+.prow .field{width:7rem;font-family:var(--font-mono)}
+.plist{display:flex;flex-direction:column;gap:14px}
+.part{border:1px solid var(--line);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.phead .gv{font-family:var(--font-mono);font-size:1.15rem}
+.pstage{display:flex;justify-content:center;align-items:center;min-height:80px;padding:8px;border-radius:14px;background:var(--surface);color:var(--fg);overflow:hidden}
+.pstage p{margin:0;text-align:center}
+.pfoot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.btn2.sm{width:auto;padding:10px 18px}
+.btn2:disabled{opacity:.3;cursor:not-allowed}
+.plab{font-family:var(--font-mono);font-size:11px;fill:currentColor;opacity:.7}
+
+/* Sheets (Kalibrierung, Zutaten) */
+.modal{
+  position:fixed;inset:0;z-index:90;background:var(--scrim);overflow:auto;
+  display:flex;padding:16px;
+  padding-top:max(16px,env(safe-area-inset-top,0px));
+  padding-bottom:max(16px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.sheet{
+  margin:auto;width:100%;max-width:440px;background:var(--bg);color:var(--fg);border:1px solid var(--line);
+  border-radius:24px;padding:22px;
+}
+.sheet h2{font-size:1.4rem;font-weight:700;letter-spacing:-.025em;line-height:1.2;margin:0 0 8px}
+.sheet p{margin:0 0 14px}
+.sheet .actions{display:flex;flex-direction:column;gap:8px;align-items:stretch;margin-top:18px}
+.sheet .actions .linkbtn{align-self:center}
+.welcome{padding:12px 14px;border-radius:14px;background:var(--surface)}
+.calbox{display:flex;gap:20px;align-items:flex-start}
+.calcol{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none}
+.calbar{width:60px;background:var(--ring-fill);border:2px solid var(--fg);border-radius:8px}
+.calcap{font-family:var(--font-mono);font-size:.75rem;color:var(--muted)}
+.calctl{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.calval{font-family:var(--font-mono);font-size:1.4rem}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{
+  flex:none;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+  font:inherit;font-size:1.4rem;line-height:1;cursor:pointer;
+}
+input[type=range]{flex:1;min-width:0;accent-color:var(--fg)}
+.field{font:inherit;font-size:1rem;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);min-width:0}
+.field[aria-invalid="true"]{border:2px dashed var(--fg)}
+.zrows{display:flex;flex-direction:column}
+.zrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
+.zrow .nm{flex:1 1 100%}
+.zrow .gp{width:5rem;font-family:var(--font-mono)}
+.zrow .u{font-size:.85rem;color:var(--muted)}
+.zrow .del{margin-left:auto;font:inherit;font-size:.9rem;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:10px;padding:8px 12px;cursor:pointer}
+.zrow .del:disabled{opacity:.3;cursor:not-allowed}
+.btn2{width:100%;font:inherit;font-weight:600;padding:12px;border-radius:14px;border:1px solid var(--fg);background:transparent;color:var(--fg);cursor:pointer}
+
+/* Vollbild: feste Fläche, Kreis immer in der Bildschirmmitte */
+.overlay{
+  position:fixed;inset:0;z-index:100;background:var(--ov-bg);color:var(--ov-fg);
+  --ring-fill:var(--ov-fill);
+  display:flex;align-items:center;justify-content:center;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;
+}
+.overlay svg{display:block}
+.ov-label{
+  position:absolute;left:0;right:0;top:0;margin:0;text-align:center;font-family:var(--font-mono);font-size:.85rem;
+  color:rgba(255,255,255,.6);
+  padding-top:max(18px,env(safe-area-inset-top,0px));
+}
+.ov-foot{
+  position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding-bottom:max(18px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.hold{
+  position:relative;overflow:hidden;font:inherit;font-size:.95rem;color:var(--ov-fg);background:transparent;
+  border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:12px 22px;cursor:pointer;
+  touch-action:none;-webkit-user-select:none;user-select:none;
+}
+.hold .bar{position:absolute;inset:0;background:rgba(255,255,255,.28);transform:scaleX(0);transform-origin:left;transition:transform .15s}
+.hold.holding .bar{transform:scaleX(1);transition:transform 1s linear}
+.hold span.t{position:relative}
+.ov-hint{margin:0;font-size:.78rem;color:rgba(255,255,255,.45)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="14" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="17" cy="17" r="4" fill="currentColor"/></svg>
+      <h1>pinch</h1>
+    </div>
+    <p class="tag">Pulver abmessen mit der Schablone fürs Display.</p>
+  </header>
+
+  <section class="calcard" id="calCard" aria-live="polite">
+    <div class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" id="calIcon"></svg></div>
+    <div class="txt"><strong id="calTitle"></strong><span class="sub" id="calSub"></span></div>
+    <button type="button" id="calOpen"></button>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Module">
+    <button class="tab" type="button" role="tab" id="tabMeasure" aria-selected="true">Abmessen</button>
+    <button class="tab" type="button" role="tab" id="tabSplit" aria-selected="false">Aufteilen</button>
+  </div>
+
+  <div class="panel" id="panelMeasure" role="tabpanel" aria-labelledby="tabMeasure">
+  <section aria-labelledby="zutat">
+    <div class="labelrow">
+      <span class="label" id="zutat">Zutat</span>
+      <button class="linkbtn" type="button" id="editZ">Zutaten bearbeiten</button>
+    </div>
+    <div class="chips" id="chips" role="group" aria-labelledby="zutat"></div>
+  </section>
+
+  <section>
+    <label class="label" for="grams" style="margin-bottom:10px">Menge</label>
+    <div class="amount">
+      <input id="grams" type="text" inputmode="decimal" value="1" autocomplete="off">
+      <span class="unit">g</span>
+    </div>
+    <div class="chips" id="presets" style="margin-top:12px" role="group" aria-label="Schnellauswahl"></div>
+  </section>
+
+  <section aria-live="polite">
+    <span class="label" style="margin-bottom:10px">Schablone</span>
+    <div class="stage" id="stage"></div>
+  </section>
+
+  <section>
+    <button class="btn" id="openFs" type="button">Schablone im Vollbild</button>
+    <p class="hint">Im Vollbild bleibt der Kreis fest in der Bildschirmmitte. Zum Schließen den Knopf unten eine Sekunde gedrückt halten.</p>
+    <button class="btn2" type="button" id="toSplit" style="margin-top:14px">Weiter zum Aufteilen</button>
+  </section>
+
+  <section>
+    <span class="label">So geht's</span>
+    <ol class="steps">
+      <li>Verteile das Pulver <strong>flach und gleichmäßig</strong> im Kreis, ohne Häufchen.</li>
+      <li>Streiche mit einem Kartenrand glatt, bis der ganze Kreis bedeckt ist und nichts darüber hinausgeht.</li>
+    </ol>
+  </section>
+
+  </div>
+
+  <div class="panel" id="panelSplit" role="tabpanel" aria-labelledby="tabSplit" hidden>
+    <section class="summary" aria-live="polite">
+      <div>
+        <span class="label">Gesamtmenge</span>
+        <div class="big" id="sumAmt"></div>
+        <span class="sn" id="sumName"></span>
+      </div>
+      <button class="linkbtn" type="button" id="backMeasure">Ändern</button>
+    </section>
+
+    <section>
+      <span class="label lb">Anzahl der Teile</span>
+      <div class="npick">
+        <button class="sq" type="button" id="nMinus" aria-label="Ein Teil weniger">−</button>
+        <span class="nval" id="nVal" aria-live="polite">2</span>
+        <button class="sq" type="button" id="nPlus" aria-label="Ein Teil mehr">+</button>
+      </div>
+      <div class="chips" id="nChips" role="group" aria-label="Schnellauswahl Teile">
+        <button class="chip mono" type="button" data-n="2">2</button>
+        <button class="chip mono" type="button" data-n="3">3</button>
+        <button class="chip mono" type="button" data-n="4">4</button>
+        <button class="chip mono" type="button" data-n="5">5</button>
+        <button class="chip mono" type="button" data-n="6">6</button>
+      </div>
+    </section>
+
+    <section>
+      <span class="label lb">Aufteilung</span>
+      <div class="chips" role="group" aria-label="Aufteilung">
+        <button class="chip" type="button" id="modeEq" aria-pressed="true">Gleich groß</button>
+        <button class="chip" type="button" id="modeDiff" aria-pressed="false">Unterschiedlich</button>
+      </div>
+      <div id="splitDiff" hidden style="margin-top:12px">
+        <div id="splitRows"></div>
+        <button class="linkbtn" type="button" id="evenOut">Gleichmäßig verteilen</button>
+      </div>
+      <p class="sumstat" id="sumStatus" aria-live="polite"></p>
+    </section>
+
+    <section>
+      <span class="label lb">Schablonen</span>
+      <div class="stage" id="partList"></div>
+      <button class="btn" type="button" id="openFsAll" style="margin-top:14px">Alle Schablonen im Vollbild</button>
+      <p class="hint">Im Vollbild liegen alle Streifen fest auf dem Display. Zum Schließen den Knopf unten eine Sekunde gedrückt halten.</p>
+    </section>
+
+    <section>
+      <span class="label lb">So geht's</span>
+      <ol class="steps" style="margin-top:0">
+        <li>Miss die Gesamtmenge im Modul „Abmessen“ im großen Kreis ab.</li>
+        <li>Ziehe das Pulver mit einem Messer oder Kartenrand zu <strong>flachen Linien</strong> auf die Streifen, bis jeder Streifen gleichmäßig bedeckt ist.</li>
+      </ol>
+    </section>
+  </div>
+
+  <p class="note">Die Menge im Kreis ist ein Richtwert und kann um 20 bis 30 Prozent abweichen. Für exakte Gramm nimm eine Küchenwaage mit 0,1 g Auflösung.</p>
+</main>
+
+<!-- Kalibrierung -->
+<div class="modal" id="calModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="calH">
+    <h2 id="calH">Display kalibrieren</h2>
+    <p class="welcome" id="calFirst">Willkommen bei Pinch. Damit der Kreis auf deinem Display die richtige Größe hat, muss Pinch einmal wissen, wie groß dein Bildschirm ist. Das dauert etwa 20 Sekunden und wird auf diesem Gerät gespeichert.</p>
+    <p>Halte eine Bankkarte mit der kurzen Seite (54 mm) an den Balken und stelle den Regler so ein, dass beide gleich lang sind.</p>
+    <div class="calbox">
+      <div class="calcol"><div class="calbar" id="calBar"></div><span class="calcap">54 mm</span></div>
+      <div class="calctl">
+        <span class="calval" id="calVal"></span>
+        <div class="stepper">
+          <button type="button" id="calMinus" aria-label="Kleiner">−</button>
+          <input id="calRange" type="range" min="3" max="7" step="0.01" value="5.5" aria-label="Pixel pro Millimeter">
+          <button type="button" id="calPlus" aria-label="Größer">+</button>
+        </div>
+        <span class="calcap">Pixel pro Millimeter</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" type="button" id="calDone">Fertig</button>
+      <button class="linkbtn" type="button" id="calCancel">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Zutaten bearbeiten -->
+<div class="modal" id="edModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="edH">
+    <h2 id="edH">Zutaten bearbeiten</h2>
+    <p class="note">Gib jeder Zutat einen Namen und das Gewicht eines gestrichenen Teelöffels (5 ml). Wiege dafür einen Teelöffel ab. Daraus berechnet Pinch die Kreisgröße.</p>
+    <div class="zrows" id="zrows" style="margin-top:8px"></div>
+    <div class="actions">
+      <button class="btn2" type="button" id="addZ">Zutat hinzufügen</button>
+      <button class="btn" type="button" id="edDone">Fertig</button>
+      <button class="linkbtn" type="button" id="resetZ">Auf Standard zurücksetzen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vollbild-Schablone -->
+<div class="overlay" id="ov" hidden role="dialog" aria-modal="true" aria-label="Schablone im Vollbild">
+  <p class="ov-label" id="ovLabel"></p>
+  <div id="ovCenter"></div>
+  <div class="ov-foot">
+    <button class="hold" id="holdBtn" type="button"><span class="bar"></span><span class="t">Zum Schließen halten</span></button>
+    <p class="ov-hint">Berührungen auf der Fläche werden ignoriert.</p>
+  </div>
+</div>
+
+<script>
+// gpt = Gramm pro gestrichenem Teelöffel (5 ml); Richtwerte
+var DEFAULTS = [
+  {n:"Zucker",gpt:4.25},{n:"Puderzucker",gpt:2.8},{n:"Mehl",gpt:2.75},{n:"Speisestärke",gpt:3},
+  {n:"Salz, fein",gpt:5.75},{n:"Backpulver",gpt:4.25},{n:"Natron",gpt:5},{n:"Kakao",gpt:2.25},
+  {n:"Zimt",gpt:2.5},{n:"Paprika, edelsüß",gpt:2.25},{n:"Pfeffer, gemahlen",gpt:2.5},{n:"Kurkuma",gpt:3}
+];
+var PRESETS = [0.1,0.25,0.5,0.75,1];
+var DEPTH = 3;        // mm, feste Schichthöhe
+var PPM_MIN = 3, PPM_MAX = 7;
+var fmt = new Intl.NumberFormat("de-DE",{maximumFractionDigits:1});
+var fmt2 = new Intl.NumberFormat("de-DE",{maximumFractionDigits:2});
+var fmt3 = new Intl.NumberFormat("de-DE",{maximumFractionDigits:3});
+var ovCtx = {g: 0, title: ""};
+var wakeLock = null, holdTimer = null, tmpPpm = 5.5, resetTimer = null;
+
+function $(id){ return document.getElementById(id); }
+function defaults(){ return DEFAULTS.map(function(z, i){ return {id:"d" + i, n:z.n, gpt:z.gpt}; }); }
+
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e) { return null; } }
+function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e) {} }
+
+var zutaten = (function(){
+  try {
+    var arr = JSON.parse(lsGet("pinch.zutaten"));
+    if (Array.isArray(arr) && arr.length){
+      var ok = arr.every(function(z){ return z && typeof z.id === "string" && typeof z.n === "string" && z.gpt > 0; });
+      if (ok) return arr;
+    }
+  } catch(e) {}
+  return defaults();
+})();
+
+var state = {id: zutaten[0].id, g: 1, ppm: 5.5, calibrated: false};
+(function(){
+  var p = parseFloat(lsGet("pinch.ppm"));
+  if (p >= PPM_MIN && p <= PPM_MAX) state.ppm = p;
+  state.calibrated = lsGet("pinch.calibrated") === "1";
+})();
+
+function saveZ(){ lsSet("pinch.zutaten", JSON.stringify(zutaten)); }
+function current(){
+  for (var i = 0; i < zutaten.length; i++) if (zutaten[i].id === state.id) return zutaten[i];
+  state.id = zutaten[0].id; return zutaten[0];
+}
+
+function dims(){ return dimsFor(state.g); }
+function dimsFor(g){
+  if (!(g > 0)) return null;
+  var z = current();
+  var ml = g / (z.gpt / 5);
+  var areaCm2 = ml / (DEPTH / 10);
+  var dMm = 2 * Math.sqrt(areaCm2 / Math.PI) * 10;
+  return {dMm: dMm, dPx: dMm * state.ppm};
+}
+
+function circleSvg(dPx, dMm){
+  var pad = 14, size = Math.ceil(dPx) + pad * 2, c = size / 2, r = dPx / 2, t = 7;
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="Schablone, Durchmesser ' + fmt.format(dMm) + ' Millimeter">' +
+    '<circle class="ring" cx="' + c + '" cy="' + c + '" r="' + r + '"/>' +
+    '<line class="tick" x1="' + (c - r - t) + '" y1="' + c + '" x2="' + (c - r) + '" y2="' + c + '"/>' +
+    '<line class="tick" x1="' + (c + r) + '" y1="' + c + '" x2="' + (c + r + t) + '" y2="' + c + '"/>' +
+    '<line class="tick" x1="' + c + '" y1="' + (c - r - t) + '" x2="' + c + '" y2="' + (c - r) + '"/>' +
+    '<line class="tick" x1="' + c + '" y1="' + (c + r) + '" x2="' + c + '" y2="' + (c + r + t) + '"/>' +
+    '</svg>';
+}
+
+/* ---------- Scroll-Sperre ---------- */
+function updateLock(){
+  var any = !$("calModal").hidden || !$("edModal").hidden || !$("ov").hidden;
+  document.documentElement.style.overflow = any ? "hidden" : "";
+  document.body.style.overflow = any ? "hidden" : "";
+}
+
+/* ---------- Zutaten-Chips ---------- */
+function buildChips(){
+  var box = $("chips"); box.innerHTML = "";
+  zutaten.forEach(function(z){
+    var b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = z.n;
+    b.setAttribute("aria-pressed", z.id === state.id ? "true" : "false");
+    b.addEventListener("click", function(){ state.id = z.id; buildChips(); render(); });
+    box.appendChild(b);
+  });
+  var add = document.createElement("button");
+  add.className = "chip add"; add.type = "button"; add.textContent = "+ Neue Zutat";
+  add.addEventListener("click", function(){ openEditor(); addZutat(); });
+  box.appendChild(add);
+
+  var pb = $("presets"); pb.innerHTML = "";
+  PRESETS.forEach(function(p){
+    var b = document.createElement("button");
+    b.className = "chip mono"; b.type = "button"; b.textContent = fmt2.format(p) + " g";
+    b.setAttribute("aria-pressed", state.g === p ? "true" : "false");
+    b.addEventListener("click", function(){ state.g = p; $("grams").value = fmt2.format(p); resetParts(); buildSplit(); buildChips(); render(); });
+    pb.appendChild(b);
+  });
+}
+
+/* ---------- Vorschau ---------- */
+function viewportFits(dPx){
+  return dPx + 28 <= Math.min(window.innerWidth, window.innerHeight) - 48;
+}
+function render(){ renderMeasure(); renderParts(); }
+function renderMeasure(){
+  var d = dims(), stage = $("stage"), btn = $("openFs");
+  if (!d){
+    stage.innerHTML = '<p class="dia">Gib eine Menge in Gramm ein.</p>';
+    btn.disabled = true;
+    return;
+  }
+  var maxPx = Math.max(120, stage.clientWidth - 40);
+  if (d.dPx > maxPx){
+    stage.innerHTML = '<p class="warn">Zu groß für das Display (Ø ' + fmt.format(d.dMm) + ' mm).</p>' +
+      '<p class="dia">Teile die Menge in zwei Portionen.</p>';
+    btn.disabled = true;
+    return;
+  }
+  stage.innerHTML = circleSvg(d.dPx, d.dMm) + '<p class="dia">Ø ' + fmt.format(d.dMm) + ' mm</p>';
+  btn.disabled = !viewportFits(d.dPx);
+}
+
+/* ---------- Kalibrierfeld ---------- */
+function updateCalCard(){
+  var card = $("calCard"), icon = $("calIcon");
+  if (state.calibrated){
+    card.classList.remove("todo");
+    $("calTitle").textContent = "Display kalibriert";
+    $("calSub").textContent = "1 mm = " + fmt2.format(state.ppm) + " Pixel";
+    $("calOpen").textContent = "Anpassen";
+    icon.innerHTML = '<path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
+  } else {
+    card.classList.add("todo");
+    $("calTitle").textContent = "Display nicht kalibriert";
+    $("calSub").textContent = "Ohne Kalibrierung stimmt die Kreisgröße nicht.";
+    $("calOpen").textContent = "Kalibrieren";
+    icon.innerHTML = '<path d="M10 4v7M10 14.5v1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>';
+  }
+}
+
+/* ---------- Kalibrierung (Sheet) ---------- */
+function updateCalUI(){
+  $("calBar").style.height = (54 * tmpPpm) + "px";
+  $("calRange").value = tmpPpm;
+  $("calVal").textContent = fmt2.format(tmpPpm) + " px/mm";
+}
+function openCal(first){
+  tmpPpm = state.ppm;
+  $("calFirst").hidden = !first;
+  $("calCancel").textContent = first ? "Später" : "Abbrechen";
+  updateCalUI();
+  $("calModal").hidden = false;
+  updateLock();
+  $("calDone").focus();
+}
+function closeCal(){ $("calModal").hidden = true; updateLock(); }
+function nudge(delta){
+  tmpPpm = Math.min(PPM_MAX, Math.max(PPM_MIN, Math.round((tmpPpm + delta) * 100) / 100));
+  updateCalUI();
+}
+
+/* ---------- Zutaten-Editor ---------- */
+function buildEditor(focusId){
+  var box = $("zrows"); box.innerHTML = "";
+  zutaten.forEach(function(z){
+    var row = document.createElement("div"); row.className = "zrow";
+
+    var nm = document.createElement("input");
+    nm.className = "field nm"; nm.type = "text"; nm.value = z.n; nm.maxLength = 30;
+    nm.setAttribute("aria-label", "Name der Zutat");
+    nm.addEventListener("input", function(){ z.n = nm.value.trim() || "Zutat"; saveZ(); buildChips(); });
+
+    var gp = document.createElement("input");
+    gp.className = "field gp"; gp.type = "text"; gp.inputMode = "decimal"; gp.value = fmt2.format(z.gpt);
+    gp.setAttribute("aria-label", "Gramm pro Teelöffel");
+    gp.addEventListener("input", function(){
+      var v = parseFloat(String(gp.value).replace(",", "."));
+      if (v > 0 && v <= 20){ z.gpt = v; gp.removeAttribute("aria-invalid"); saveZ(); render(); }
+      else gp.setAttribute("aria-invalid", "true");
+    });
+
+    var u = document.createElement("span"); u.className = "u"; u.textContent = "g pro Teelöffel";
+
+    var del = document.createElement("button");
+    del.className = "del"; del.type = "button"; del.textContent = "Löschen";
+    del.setAttribute("aria-label", z.n + " löschen");
+    del.disabled = zutaten.length <= 1;
+    del.addEventListener("click", function(){
+      zutaten = zutaten.filter(function(o){ return o.id !== z.id; });
+      if (state.id === z.id) state.id = zutaten[0].id;
+      saveZ(); buildChips(); render(); buildEditor();
+    });
+
+    row.appendChild(nm); row.appendChild(gp); row.appendChild(u); row.appendChild(del);
+    box.appendChild(row);
+    if (focusId && z.id === focusId){ setTimeout(function(){ nm.focus(); nm.select(); }, 0); }
+  });
+}
+function addZutat(){
+  var z = {id: "u" + Date.now(), n: "Neue Zutat", gpt: 3};
+  zutaten.push(z); state.id = z.id;
+  saveZ(); buildChips(); render(); buildEditor(z.id);
+  var rows = $("zrows");
+  setTimeout(function(){ rows.lastElementChild && rows.lastElementChild.scrollIntoView({block:"nearest"}); }, 0);
+}
+function openEditor(){
+  buildEditor();
+  $("edModal").hidden = false;
+  updateLock();
+}
+function closeEditor(){
+  $("edModal").hidden = true; updateLock();
+  clearTimeout(resetTimer); $("resetZ").textContent = "Auf Standard zurücksetzen";
+}
+
+/* ---------- Vollbild-Schablone ---------- */
+function renderOverlay(){
+  if (ovCtx.kind === "bars"){
+    var gs = partGrams();
+    var L = layoutBars(gs, window.innerWidth - 48, window.innerHeight - OV_TOP - OV_BOTTOM, false);
+    if (!L.ok){ closeOverlay(); return; }
+    $("ovCenter").innerHTML = L.svg;
+    $("ovLabel").textContent = current().n + " · " + gs.length + " Teile · " + fmt3.format(state.g) + " g";
+    return;
+  }
+  var d = dimsFor(ovCtx.g);
+  if (!d){ closeOverlay(); return; }
+  $("ovCenter").innerHTML = circleSvg(d.dPx, d.dMm);
+  $("ovLabel").textContent = (ovCtx.title ? ovCtx.title + " · " : "") + current().n + " · " + fmt3.format(ovCtx.g) + " g · Ø " + fmt.format(d.dMm) + " mm";
+}
+function openOverlay(g, title){
+  if (!dimsFor(g)) return;
+  ovCtx = {kind: "circle", g: g, title: title || ""};
+  showOverlay();
+}
+function openBars(){
+  var gs = partGrams();
+  if (!layoutBars(gs, window.innerWidth - 48, window.innerHeight - OV_TOP - OV_BOTTOM, false).ok) return;
+  ovCtx = {kind: "bars", g: 0, title: ""};
+  showOverlay();
+}
+function showOverlay(){
+  $("ov").hidden = false;
+  updateLock();
+  renderOverlay();
+  try {
+    var de = document.documentElement;
+    if (de.requestFullscreen){ var p = de.requestFullscreen(); if (p && p.catch) p.catch(function(){}); }
+  } catch(e) {}
+  try {
+    if (navigator.wakeLock){
+      navigator.wakeLock.request("screen").then(function(l){ wakeLock = l; }).catch(function(){});
+    }
+  } catch(e) {}
+}
+function closeOverlay(){
+  endHold();
+  $("ov").hidden = true;
+  updateLock();
+  try { if (document.fullscreenElement && document.exitFullscreen){ var p = document.exitFullscreen(); if (p && p.catch) p.catch(function(){}); } } catch(e) {}
+  try { if (wakeLock){ wakeLock.release(); wakeLock = null; } } catch(e) {}
+}
+function startHold(e){
+  e.preventDefault();
+  $("holdBtn").classList.add("holding");
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(closeOverlay, 1000);
+}
+function endHold(){
+  clearTimeout(holdTimer);
+  $("holdBtn").classList.remove("holding");
+}
+
+/* ---------- Streifen-Schablonen ---------- */
+var BAR_MM = 5, OV_TOP = 60, OV_BOTTOM = 130;
+function barLenMm(g){
+  var ml = g / (current().gpt / 5);
+  var areaMm2 = ml / (DEPTH / 10) * 100;
+  return Math.max(BAR_MM, areaMm2 / BAR_MM);
+}
+// Zeilen (waagerecht untereinander) oder, wenn nötig, Spalten (senkrecht nebeneinander)
+function layoutBars(gs, W, H, rowsOnly){
+  var n = gs.length, ppm = state.ppm, bw = BAR_MM * ppm, i, s;
+  var lens = gs.map(function(g){ return barLenMm(g) * ppm; });
+  var maxL = Math.max.apply(null, lens), pad = 4;
+  var lab = 16, gap = 14, pitchR = lab + bw + gap;
+  var totH = n * pitchR - gap, contentW = Math.max(maxL, 112);
+  if (contentW + 2 * pad <= W && totH + 2 * pad <= H){
+    s = '<svg width="' + Math.ceil(contentW + 2 * pad) + '" height="' + Math.ceil(totH + 2 * pad) + '" role="img" aria-label="Schablonen als Streifen"><g transform="translate(' + pad + ' ' + pad + ')">';
+    for (i = 0; i < n; i++){
+      var y0 = i * pitchR;
+      s += '<text class="plab" x="0" y="' + (y0 + 11) + '">' + (i + 1) + ' · ' + fmt3.format(gs[i]) + ' g</text>' +
+           '<rect class="ring" x="0" y="' + (y0 + lab) + '" width="' + lens[i] + '" height="' + bw + '" rx="2"/>';
+    }
+    return {ok: true, mode: "rows", svg: s + '</g></svg>'};
+  }
+  if (!rowsOnly){
+    var pitchC = Math.max(bw + 20, 58), labH = 30, totW = n * pitchC;
+    if (totW + 2 * pad <= W && maxL + labH + 2 * pad <= H){
+      s = '<svg width="' + Math.ceil(totW + 2 * pad) + '" height="' + Math.ceil(maxL + labH + 2 * pad) + '" role="img" aria-label="Schablonen als Streifen"><g transform="translate(' + pad + ' ' + pad + ')">';
+      for (i = 0; i < n; i++){
+        var cx = i * pitchC + pitchC / 2;
+        s += '<text class="plab" text-anchor="middle" x="' + cx + '" y="11">' + (i + 1) + '</text>' +
+             '<text class="plab" text-anchor="middle" x="' + cx + '" y="25">' + fmt3.format(gs[i]) + ' g</text>' +
+             '<rect class="ring" x="' + (cx - bw / 2) + '" y="' + labH + '" width="' + bw + '" height="' + lens[i] + '" rx="2"/>';
+      }
+      return {ok: true, mode: "cols", svg: s + '</g></svg>'};
+    }
+  }
+  return {ok: false};
+}
+
+/* ---------- Modul 2: Aufteilen ---------- */
+var split = {n: 2, equal: true, parts: []};
+
+function round3(x){ return Math.round(x * 1000) / 1000; }
+function resetParts(){
+  var t = state.g, n = split.n, arr = [], sum = 0, i, v;
+  for (i = 0; i < n; i++){
+    if (!(t > 0)){ arr.push(NaN); continue; }
+    if (i < n - 1){ v = round3(t / n); arr.push(v); sum += v; }
+    else arr.push(round3(t - sum));
+  }
+  split.parts = arr;
+}
+function partGrams(){
+  var t = state.g, n = split.n, out = [], i;
+  if (split.equal){ for (i = 0; i < n; i++) out.push(t > 0 ? t / n : NaN); return out; }
+  return split.parts.slice();
+}
+
+function buildSplit(){
+  $("nVal").textContent = split.n;
+  document.querySelectorAll("#nChips .chip").forEach(function(b){
+    b.setAttribute("aria-pressed", String(parseInt(b.getAttribute("data-n"), 10) === split.n));
+  });
+  $("modeEq").setAttribute("aria-pressed", String(split.equal));
+  $("modeDiff").setAttribute("aria-pressed", String(!split.equal));
+  $("splitDiff").hidden = split.equal;
+  var rows = $("splitRows"); rows.innerHTML = "";
+  if (!split.equal){
+    split.parts.forEach(function(v, i){
+      var r = document.createElement("div"); r.className = "prow";
+      var l = document.createElement("label"); l.textContent = "Teil " + (i + 1); l.setAttribute("for", "pg" + i);
+      var inp = document.createElement("input");
+      inp.className = "field"; inp.id = "pg" + i; inp.type = "text"; inp.inputMode = "decimal";
+      inp.value = v > 0 ? fmt3.format(v) : "";
+      inp.addEventListener("input", function(){
+        var x = parseFloat(String(inp.value).replace(",", "."));
+        split.parts[i] = x > 0 ? x : NaN;
+        renderParts();
+      });
+      var u = document.createElement("span"); u.className = "unit"; u.style.fontSize = "1rem"; u.textContent = "g";
+      r.appendChild(l); r.appendChild(inp); r.appendChild(u);
+      rows.appendChild(r);
+    });
+  }
+  renderParts();
+}
+
+function renderParts(){
+  $("sumName").textContent = current().n;
+  $("sumAmt").textContent = state.g > 0 ? fmt3.format(state.g) + " g" : "–";
+  var box = $("partList"), st = $("sumStatus");
+  if (!(state.g > 0)){
+    box.innerHTML = '<p class="dia">Lege zuerst bei „Abmessen“ eine Gesamtmenge fest.</p>';
+    st.textContent = "";
+    $("openFsAll").disabled = true;
+    return;
+  }
+  var gs = partGrams();
+  if (split.equal){
+    st.textContent = split.n + " Teile à " + fmt3.format(state.g / split.n) + " g";
+  } else {
+    var sum = 0, missing = false;
+    gs.forEach(function(v){ if (v > 0) sum += v; else missing = true; });
+    var diff = sum - state.g;
+    if (missing) st.textContent = "Bitte alle Teile ausfüllen.";
+    else if (Math.abs(diff) < 0.0005) st.textContent = "Summe stimmt: " + fmt3.format(sum) + " g";
+    else if (diff < 0) st.textContent = "Summe " + fmt3.format(sum) + " g. Es fehlen " + fmt3.format(-diff) + " g.";
+    else st.textContent = "Summe " + fmt3.format(sum) + " g. " + fmt3.format(diff) + " g zu viel.";
+  }
+  var btn = $("openFsAll");
+  if (box.clientWidth === 0) return; // Modul gerade ausgeblendet
+  var anyMissing = gs.some(function(g){ return !(g > 0); });
+  if (anyMissing){
+    box.innerHTML = '<p class="dia">Bei einem Teil fehlt die Menge.</p>';
+    btn.disabled = true;
+    return;
+  }
+  var L = layoutBars(gs, box.clientWidth - 32, Infinity, true);
+  box.innerHTML = L.ok ? L.svg : '<p class="warn">Zu lang für die Vorschau.</p><p class="dia">Nutze das Vollbild.</p>';
+  btn.disabled = !layoutBars(gs, window.innerWidth - 48, window.innerHeight - OV_TOP - OV_BOTTOM, false).ok;
+}
+
+function setN(n){ split.n = Math.min(12, Math.max(2, n)); resetParts(); buildSplit(); }
+$("nMinus").addEventListener("click", function(){ setN(split.n - 1); });
+$("nPlus").addEventListener("click", function(){ setN(split.n + 1); });
+document.querySelectorAll("#nChips .chip").forEach(function(b){
+  b.addEventListener("click", function(){ setN(parseInt(b.getAttribute("data-n"), 10)); });
+});
+$("modeEq").addEventListener("click", function(){ split.equal = true; buildSplit(); });
+$("modeDiff").addEventListener("click", function(){ split.equal = false; resetParts(); buildSplit(); });
+$("evenOut").addEventListener("click", function(){ resetParts(); buildSplit(); });
+$("openFsAll").addEventListener("click", openBars);
+
+/* ---------- Tabs ---------- */
+function showTab(name){
+  var m = name === "measure";
+  $("panelMeasure").hidden = !m;
+  $("panelSplit").hidden = m;
+  $("tabMeasure").setAttribute("aria-selected", String(m));
+  $("tabSplit").setAttribute("aria-selected", String(!m));
+  render();
+  window.scrollTo(0, 0);
+}
+$("tabMeasure").addEventListener("click", function(){ showTab("measure"); });
+$("tabSplit").addEventListener("click", function(){ showTab("split"); });
+$("toSplit").addEventListener("click", function(){ showTab("split"); });
+$("backMeasure").addEventListener("click", function(){ showTab("measure"); });
+
+/* ---------- Ereignisse ---------- */
+$("grams").addEventListener("input", function(e){
+  state.g = parseFloat(String(e.target.value).replace(",", "."));
+  resetParts(); buildSplit();
+  buildChips(); render();
+});
+$("openFs").addEventListener("click", function(){ openOverlay(state.g, ""); });
+$("editZ").addEventListener("click", openEditor);
+$("addZ").addEventListener("click", addZutat);
+$("edDone").addEventListener("click", closeEditor);
+$("edModal").addEventListener("click", function(e){ if (e.target === $("edModal")) closeEditor(); });
+$("resetZ").addEventListener("click", function(){
+  var b = $("resetZ");
+  if (b.textContent === "Auf Standard zurücksetzen"){
+    b.textContent = "Wirklich zurücksetzen? Nochmal tippen";
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(function(){ b.textContent = "Auf Standard zurücksetzen"; }, 4000);
+  } else {
+    clearTimeout(resetTimer);
+    zutaten = defaults(); state.id = zutaten[0].id;
+    saveZ(); buildChips(); render(); buildEditor();
+    b.textContent = "Auf Standard zurücksetzen";
+  }
+});
+
+$("calOpen").addEventListener("click", function(){ openCal(false); });
+$("calRange").addEventListener("input", function(e){ tmpPpm = parseFloat(e.target.value); updateCalUI(); });
+$("calMinus").addEventListener("click", function(){ nudge(-0.05); });
+$("calPlus").addEventListener("click", function(){ nudge(0.05); });
+$("calDone").addEventListener("click", function(){
+  state.ppm = tmpPpm; state.calibrated = true;
+  lsSet("pinch.ppm", String(state.ppm)); lsSet("pinch.calibrated", "1");
+  closeCal(); updateCalCard(); render();
+});
+$("calCancel").addEventListener("click", closeCal);
+$("calModal").addEventListener("click", function(e){ if (e.target === $("calModal")) closeCal(); });
+
+var holdBtn = $("holdBtn");
+holdBtn.addEventListener("pointerdown", startHold);
+["pointerup","pointerleave","pointercancel"].forEach(function(ev){ holdBtn.addEventListener(ev, endHold); });
+holdBtn.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+
+var ov = $("ov");
+["touchmove","wheel"].forEach(function(ev){
+  ov.addEventListener(ev, function(e){ e.preventDefault(); }, {passive:false});
+});
+ov.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+ov.addEventListener("gesturestart", function(e){ e.preventDefault(); });
+
+document.addEventListener("keydown", function(e){
+  if (e.key !== "Escape") return;
+  if (!ov.hidden) closeOverlay();
+  else if (!$("calModal").hidden) closeCal();
+  else if (!$("edModal").hidden) closeEditor();
+});
+document.addEventListener("visibilitychange", function(){
+  if (!ov.hidden && document.visibilityState === "visible" && !wakeLock){
+    try { navigator.wakeLock && navigator.wakeLock.request("screen").then(function(l){ wakeLock = l; }).catch(function(){}); } catch(e) {}
+  }
+});
+window.addEventListener("resize", function(){ render(); if (!ov.hidden) renderOverlay(); });
+
+resetParts(); buildSplit();
+buildChips(); updateCalCard(); render();
+if (!state.calibrated) openCal(true);
+</script>
+</body>
+</html>
